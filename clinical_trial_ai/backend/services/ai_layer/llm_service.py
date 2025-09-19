@@ -1,5 +1,5 @@
 """
-LLM Service for Clinical Trial AI - Perplexity with Local Fallback
+LLM Service for Clinical Trial AI - OpenRouter/Perplexity Support
 """
 
 import asyncio
@@ -17,6 +17,74 @@ class LLMProvider(ABC):
     async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
         """Generate response with context"""
         pass
+
+
+class OpenRouterProvider(LLMProvider):
+    """OpenRouter API provider"""
+
+    def __init__(self, api_key: str, model: str = "anthropic/claude-3.5-sonnet"):
+        self.api_key = api_key
+        self.model = model
+        self.base_url = "https://openrouter.ai/api/v1"
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://clinical-trial-ai.com",  # Optional: your site URL
+            "X-Title": "Clinical Trial AI"  # Optional: your app name
+        }
+
+    async def _generate_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Generate response using OpenRouter API"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "model": self.model,
+                    "messages": messages,
+                    "max_tokens": kwargs.get("max_tokens", 1000),
+                    "temperature": kwargs.get("temperature", 0.7)
+                }
+
+                async with session.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    json=payload
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data["choices"][0]["message"]["content"]
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"OpenRouter API error: {response.status} - {error_text}")
+        except Exception as e:
+            print(f"Error calling OpenRouter API: {e}")
+            raise e
+
+    async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
+        """Generate response with clinical trial context"""
+
+        system_prompt = """You are a clinical trial AI assistant. You help users understand clinical trial documents, protocols, and results. 
+
+Guidelines:
+- Provide accurate, evidence-based responses
+- Cite specific information from the provided context
+- Use medical terminology appropriately
+- If information is not available in the context, clearly state this
+- Focus on clinical trial specifics like endpoints, safety, efficacy, and protocols
+- Be concise but comprehensive"""
+
+        user_prompt = f"""Context from clinical trial documents:
+{context}
+
+User Question: {query}
+
+Please provide a detailed response based on the context above. If the context doesn't contain enough information to answer the question, please state that clearly."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        return await self._generate_response(messages, **kwargs)
 
 
 class PerplexityProvider(LLMProvider):
@@ -85,122 +153,60 @@ Please provide a detailed response based on the context above. If the context do
         return await self._generate_response(messages, **kwargs)
 
 
-class LocalLLMProvider(LLMProvider):
-    """Local LLM provider (Ollama)"""
-
-    def __init__(self, model: str = "llama3.2", base_url: str = "http://localhost:11434"):
-        self.model = model
-        self.base_url = base_url
-
-    async def _generate_response(self, prompt: str, **kwargs) -> str:
-        """Generate response using local LLM (Ollama)"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                payload = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": kwargs.get("temperature", 0.7),
-                        "num_predict": kwargs.get("max_tokens", 1000)
-                    }
-                }
-
-                async with session.post(
-                    f"{self.base_url}/api/generate",
-                    json=payload
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get("response", "No response generated")
-                    else:
-                        error_text = await response.text()
-                        raise Exception(f"Local LLM error: {response.status} - {error_text}")
-        except Exception as e:
-            print(f"Error calling local LLM: {e}")
-            raise e
-
-    async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
-        """Generate response with clinical trial context"""
-
-        prompt = f"""You are a clinical trial AI assistant. You help users understand clinical trial documents, protocols, and results.
-
-Guidelines:
-- Provide accurate, evidence-based responses
-- Cite specific information from the provided context
-- Use medical terminology appropriately
-- If information is not available in the context, clearly state this
-- Focus on clinical trial specifics like endpoints, safety, efficacy, and protocols
-- Be concise but comprehensive
-
-Context from clinical trial documents:
-{context}
-
-User Question: {query}
-
-Please provide a detailed response based on the context above. If the context doesn't contain enough information to answer the question, please state that clearly.
-
-Response:"""
-
-        return await self._generate_response(prompt, **kwargs)
-
-
 class LLMService:
-    """Main LLM service that manages Perplexity with local fallback"""
+    """Main LLM service that supports OpenRouter and Perplexity"""
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, provider_type: str = "openrouter"):
         self.config = config or get_config()
-        self.primary_provider = None
-        self.fallback_provider = None
-        self._initialize_providers()
+        self.provider_type = provider_type.lower()
+        self.provider = None
+        self._initialize_provider()
 
-    def _initialize_providers(self):
-        """Initialize Perplexity as primary and local as fallback"""
-        # Primary: Perplexity
-        perplexity_key = self.config.get_llm_api_key()  # Your Perplexity API key
-        if perplexity_key:
-            self.primary_provider = PerplexityProvider(
-                api_key=perplexity_key,
-                model=self.config.llm.model_name,
-            )
-            print("Perplexity provider initialized")
+    def _initialize_provider(self):
+        """Initialize the selected provider"""
+        if self.provider_type == "openrouter":
+            api_key = self.config.get_openrouter_api_key()  # You'll need to add this method
+            if api_key:
+                self.provider = OpenRouterProvider(
+                    api_key=api_key,
+                    model=getattr(self.config.llm, 'openrouter_model', 'anthropic/claude-3.5-sonnet')
+                )
+                print("OpenRouter provider initialized")
+            else:
+                print("Warning: No OpenRouter API key found")
+
+        elif self.provider_type == "perplexity":
+            api_key = self.config.get_perplexity_api_key()  # You'll need to add this method
+            if api_key:
+                self.provider = PerplexityProvider(
+                    api_key=api_key,
+                    model=getattr(self.config.llm, 'perplexity_model', 'llama-3.1-sonar-small-128k-online')
+                )
+                print("Perplexity provider initialized")
+            else:
+                print("Warning: No Perplexity API key found")
+
         else:
-            print("Warning: No Perplexity API key found")
+            print(f"Error: Unknown provider type '{self.provider_type}'. Use 'openrouter' or 'perplexity'")
 
-        # Fallback: Local model
-        try:
-            self.fallback_provider = LocalLLMProvider(
-                model=getattr(self.config.llm, 'local_model', 'llama3.2'),
-                base_url=getattr(self.config.llm, 'local_base_url', 'http://localhost:11434')
-            )
-            print("Local LLM fallback initialized")
-        except Exception as e:
-            print(f"Warning: Local LLM fallback not available: {e}")
+    def switch_provider(self, provider_type: str):
+        """Switch between OpenRouter and Perplexity"""
+        self.provider_type = provider_type.lower()
+        self._initialize_provider()
 
     async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
-        """Generate response with automatic fallback"""
+        """Generate response using the configured provider"""
+        if not self.provider:
+            return f"Error: No {self.provider_type} provider available. Please check your API key configuration."
 
-        # Try Perplexity first
-        if self.primary_provider:
-            try:
-                print("Trying Perplexity...")
-                response = await self.primary_provider.generate_with_context(query, context, **kwargs)
-                print("Perplexity response received")
-                return response
-            except Exception as e:
-                print(f"Perplexity failed: {e}")
-
-        # Fallback to local model
-        if self.fallback_provider:
-            try:
-                print("Falling back to local model...")
-                response = await self.fallback_provider.generate_with_context(query, context, **kwargs)
-                print("Local model response received")
-                return response
-            except Exception as e:
-                print(f"Local model failed: {e}")
-
-        return "Error: No LLM providers are available. Please check your Perplexity API key or local model setup."
+        try:
+            print(f"Using {self.provider_type} provider...")
+            response = await self.provider.generate_with_context(query, context, **kwargs)
+            print(f"{self.provider_type.capitalize()} response received")
+            return response
+        except Exception as e:
+            print(f"{self.provider_type.capitalize()} failed: {e}")
+            return f"Error: Failed to generate response using {self.provider_type}. {str(e)}"
 
     async def chat_with_context(self,
                               query: str,
@@ -224,41 +230,84 @@ class LLMService:
 
         return {
             "response": response,
-            "conversation_history": conversation_history
+            "conversation_history": conversation_history,
+            "provider_used": self.provider_type
         }
 
     def is_configured(self) -> bool:
-        """Check if any LLM service is available"""
-        return self.primary_provider is not None or self.fallback_provider is not None
+        """Check if the LLM service is available"""
+        return self.provider is not None
 
     def get_status(self) -> Dict[str, Any]:
         """Get service status"""
         return {
-            "perplexity_available": self.primary_provider is not None,
-            "local_available": self.fallback_provider is not None,
+            "provider_type": self.provider_type,
             "configured": self.is_configured(),
-            "primary_model": getattr(self.primary_provider, 'model', None),
-            "fallback_model": getattr(self.fallback_provider, 'model', None)
+            "model": getattr(self.provider, 'model', None) if self.provider else None,
+            "available_providers": ["openrouter", "perplexity"]
+        }
+
+    def get_available_models(self) -> Dict[str, List[str]]:
+        """Get available models for each provider"""
+        return {
+            "openrouter": [
+                "anthropic/claude-3.5-sonnet",
+                "anthropic/claude-3-haiku",
+                "openai/gpt-4o",
+                "openai/gpt-4o-mini",
+                "meta-llama/llama-3.1-8b-instruct",
+                "meta-llama/llama-3.1-70b-instruct",
+                "google/gemini-pro-1.5"
+            ],
+            "perplexity": [
+                "llama-3.1-sonar-small-128k-online",
+                "llama-3.1-sonar-large-128k-online",
+                "llama-3.1-sonar-huge-128k-online"
+            ]
         }
 
 
 # Example usage
 async def test_llm_service():
     """Test the LLM service"""
-    service = LLMService()
+    # Test OpenRouter
+    print("=== Testing OpenRouter ===")
+    service_or = LLMService(provider_type="openrouter")
 
-    if not service.is_configured():
-        print("Error: No LLM providers configured")
-        return
+    if service_or.is_configured():
+        print("OpenRouter Status:", service_or.get_status())
 
-    print("Service Status:", service.get_status())
+        context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition Y."
+        query = "What phase is this clinical trial?"
 
-    # Test query
-    context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition Y."
-    query = "What phase is this clinical trial?"
+        response = await service_or.generate_with_context(query, context)
+        print(f"OpenRouter Response: {response}")
+    else:
+        print("OpenRouter not configured")
 
-    response = await service.generate_with_context(query, context)
-    print(f"Response: {response}")
+    print("\n=== Testing Perplexity ===")
+    # Test Perplexity
+    service_px = LLMService(provider_type="perplexity")
+
+    if service_px.is_configured():
+        print("Perplexity Status:", service_px.get_status())
+
+        context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition Y."
+        query = "What phase is this clinical trial?"
+
+        response = await service_px.generate_with_context(query, context)
+        print(f"Perplexity Response: {response}")
+    else:
+        print("Perplexity not configured")
+
+    # Test switching providers
+    print("\n=== Testing Provider Switching ===")
+    service = LLMService(provider_type="openrouter")
+    print("Available models:", service.get_available_models())
+
+    print("Switching to Perplexity...")
+    service.switch_provider("perplexity")
+    print("New status:", service.get_status())
 
 
 if __name__ == "__main__":

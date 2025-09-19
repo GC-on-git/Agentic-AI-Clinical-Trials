@@ -18,12 +18,13 @@ except ImportError:
 @dataclass
 class LLMConfig:
     """Configuration for Large Language Model integration"""
-    provider: str = "openai"  # openai, anthropic, local
-    api_key: Optional[str] = None
-    model_name: str = "sonar-pro"
+    provider: str = "openrouter"  # openrouter, perplexity
+    openrouter_api_key: Optional[str] = None
+    perplexity_api_key: Optional[str] = None
+    openrouter_model: str = "anthropic/claude-3.5-sonnet"
+    perplexity_model: str = "llama-3.1-sonar-small-128k-online"
     max_tokens: int = 1000
     temperature: float = 0.7
-    base_url: Optional[str] = None  # For custom endpoints
 
 
 @dataclass
@@ -80,12 +81,13 @@ class Config:
 
         # LLM Configuration
         self.llm = LLMConfig(
-            provider=os.getenv("LLM_PROVIDER", "openai"),
-            api_key=os.getenv("LLM_API_KEY"),
-            model_name=os.getenv("LLM_MODEL", "gpt-3.5-turbo"),
+            provider=os.getenv("LLM_PROVIDER", "openrouter"),
+            openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+            perplexity_api_key=os.getenv("PERPLEXITY_API_KEY"),
+            openrouter_model=os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"),
+            perplexity_model=os.getenv("PERPLEXITY_MODEL", "llama-3.1-sonar-small-128k-online"),
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1000")),
-            temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
-            base_url=os.getenv("LLM_BASE_URL")
+            temperature=float(os.getenv("LLM_TEMPERATURE", "0.7"))
         )
 
         # Database Configuration
@@ -122,9 +124,12 @@ class Config:
             "config_file": self.config_file,
             "config_file_exists": Path(self.config_file).exists(),
             "llm": {
-                "configured": bool(self.llm.api_key),
                 "provider": self.llm.provider,
-                "model": self.llm.model_name
+                "openrouter_configured": bool(self.llm.openrouter_api_key),
+                "perplexity_configured": bool(self.llm.perplexity_api_key),
+                "openrouter_model": self.llm.openrouter_model,
+                "perplexity_model": self.llm.perplexity_model,
+                "current_provider_configured": self._is_current_provider_configured()
             },
             "database": {
                 "db_path": self.database.db_path,
@@ -145,40 +150,113 @@ class Config:
 
         return validation_results
 
-    def get_llm_api_key(self) -> Optional[str]:
-        """Get LLM API key with fallback methods"""
-        if self.llm.api_key:
-            return self.llm.api_key
+    def _is_current_provider_configured(self) -> bool:
+        """Check if the current provider is properly configured"""
+        if self.llm.provider == "openrouter":
+            return bool(self.llm.openrouter_api_key)
+        elif self.llm.provider == "perplexity":
+            return bool(self.llm.perplexity_api_key)
+        return False
 
-        # Try alternative environment variable names
-        alternative_keys = [
-            "OPENAI_API_KEY",
-            "ANTHROPIC_API_KEY",
-            "API_KEY"
-        ]
+    def get_openrouter_api_key(self) -> Optional[str]:
+        """Get OpenRouter API key"""
+        return self.llm.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
 
-        for key in alternative_keys:
-            value = os.getenv(key)
-            if value:
-                return value
+    def get_perplexity_api_key(self) -> Optional[str]:
+        """Get Perplexity API key"""
+        return self.llm.perplexity_api_key or os.getenv("PERPLEXITY_API_KEY")
 
+    def get_current_provider_api_key(self) -> Optional[str]:
+        """Get API key for the currently configured provider"""
+        if self.llm.provider == "openrouter":
+            return self.get_openrouter_api_key()
+        elif self.llm.provider == "perplexity":
+            return self.get_perplexity_api_key()
         return None
+
+    def get_available_providers(self) -> Dict[str, bool]:
+        """Get list of available providers and their configuration status"""
+        return {
+            "openrouter": bool(self.get_openrouter_api_key()),
+            "perplexity": bool(self.get_perplexity_api_key())
+        }
+
+    def switch_provider(self, provider: str) -> bool:
+        """Switch to a different provider if configured"""
+        provider = provider.lower()
+        available_providers = self.get_available_providers()
+
+        if provider not in available_providers:
+            print(f"Error: Unknown provider '{provider}'. Available: {list(available_providers.keys())}")
+            return False
+
+        if not available_providers[provider]:
+            print(f"Error: Provider '{provider}' is not configured (no API key)")
+            return False
+
+        self.llm.provider = provider
+        print(f"Switched to provider: {provider}")
+        return True
+
+    def get_provider_models(self) -> Dict[str, str]:
+        """Get the configured models for each provider"""
+        return {
+            "openrouter": self.llm.openrouter_model,
+            "perplexity": self.llm.perplexity_model
+        }
+
+    def set_provider_model(self, provider: str, model: str) -> bool:
+        """Set the model for a specific provider"""
+        provider = provider.lower()
+
+        if provider == "openrouter":
+            self.llm.openrouter_model = model
+            print(f"Set OpenRouter model to: {model}")
+            return True
+        elif provider == "perplexity":
+            self.llm.perplexity_model = model
+            print(f"Set Perplexity model to: {model}")
+            return True
+        else:
+            print(f"Error: Unknown provider '{provider}'")
+            return False
+
+    def get_provider_status(self) -> Dict[str, Any]:
+        """Get detailed status of all providers"""
+        return {
+            "current_provider": self.llm.provider,
+            "providers": {
+                "openrouter": {
+                    "configured": bool(self.get_openrouter_api_key()),
+                    "model": self.llm.openrouter_model,
+                    "api_key_set": bool(self.llm.openrouter_api_key)
+                },
+                "perplexity": {
+                    "configured": bool(self.get_perplexity_api_key()),
+                    "model": self.llm.perplexity_model,
+                    "api_key_set": bool(self.llm.perplexity_api_key)
+                }
+            }
+        }
 
     def create_sample_env_file(self, filepath: str = ".env.example"):
         """Create a sample .env file with all available configuration options"""
         sample_content = """# Clinical Trial AI Configuration
 
-# LLM Configuration
-LLM_PROVIDER=openai
-LLM_API_KEY=your_api_key_here
-LLM_MODEL=gpt-3.5-turbo
+# LLM Provider Configuration
+LLM_PROVIDER=openrouter  # openrouter or perplexity
+
+# OpenRouter Configuration
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+
+# Perplexity Configuration  
+PERPLEXITY_API_KEY=your_perplexity_api_key_here
+PERPLEXITY_MODEL=llama-3.1-sonar-small-128k-online
+
+# LLM General Settings
 LLM_MAX_TOKENS=1000
 LLM_TEMPERATURE=0.7
-LLM_BASE_URL=
-
-# Alternative API key names (fallback options)
-OPENAI_API_KEY=your_openai_key_here
-ANTHROPIC_API_KEY=your_anthropic_key_here
 
 # Database Configuration
 DB_PATH=clinical_docs.db
@@ -192,6 +270,20 @@ VECTORDB_COLLECTION=clinical_embeddings
 # Embedding Configuration
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 EMBEDDING_CACHE_DIR=./embedding_cache
+
+# Available OpenRouter Models:
+# - anthropic/claude-3.5-sonnet
+# - anthropic/claude-3-haiku
+# - openai/gpt-4o
+# - openai/gpt-4o-mini
+# - meta-llama/llama-3.1-8b-instruct
+# - meta-llama/llama-3.1-70b-instruct
+# - google/gemini-pro-1.5
+
+# Available Perplexity Models:
+# - llama-3.1-sonar-small-128k-online
+# - llama-3.1-sonar-large-128k-online
+# - llama-3.1-sonar-huge-128k-online
 """
 
         with open(filepath, 'w') as f:
@@ -199,6 +291,26 @@ EMBEDDING_CACHE_DIR=./embedding_cache
 
         print(f"Sample environment file created at {filepath}")
         print("Copy this file to .env and update with your actual values")
+
+    def print_config_status(self):
+        """Print a formatted status of the current configuration"""
+        status = self.validate()
+        provider_status = self.get_provider_status()
+
+        print("\n=== Clinical Trial AI Configuration Status ===")
+        print(f"Config file: {status['config_file']} (exists: {status['config_file_exists']})")
+        print(f"Current provider: {provider_status['current_provider']}")
+
+        print("\nProvider Status:")
+        for provider, details in provider_status['providers'].items():
+            status_icon = "✅" if details['configured'] else "❌"
+            print(f"  {status_icon} {provider.capitalize()}: {details['model']} (API key: {'Set' if details['api_key_set'] else 'Not set'})")
+
+        print(f"\nDatabase: {status['database']['db_path']}")
+        print(f"Storage: {status['database']['storage_path']} (exists: {status['database']['storage_exists']})")
+        print(f"Vector DB: {status['vectordb']['host']}:{status['vectordb']['port']}")
+        print(f"Embedding model: {status['embedding']['model']}")
+        print("=" * 50)
 
 
 # Global config instance
@@ -225,3 +337,15 @@ Or add it to your requirements.txt file:
 # Print installation instructions if dotenv is not available
 if not DOTENV_AVAILABLE:
     install_dotenv_instructions()
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    # Print current configuration status
+    config.print_config_status()
+
+    # Test provider switching
+    print(f"\nAvailable providers: {config.get_available_providers()}")
+
+    # Create sample .env file
+    config.create_sample_env_file()

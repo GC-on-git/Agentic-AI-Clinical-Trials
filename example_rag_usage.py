@@ -42,8 +42,8 @@ async def main():
     
     # Example 1: Process a document first (if you have one)
     print("\n📄 Processing a sample document...")
-    # document_id = await flow.run_pipeline("path/to/your/clinical_trial_document.pdf")
-    # print(f"Document processed with ID: {document_id}")
+    document_id = await flow.run_pipeline("/Users/anuganch/Desktop/Mock3_final/mock_data.pdf")
+    print(f"Document processed with ID: {document_id}")
     
     # Example 2: Query the system
     print("\n❓ Querying the system...")

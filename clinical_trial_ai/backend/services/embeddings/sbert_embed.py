@@ -31,7 +31,7 @@ class SBERTEmbedder:
         embeddings = await asyncio.to_thread(
             self.model.encode, texts, convert_to_numpy=True, show_progress_bar=False
         )
-        embeddings = embeddings.tolist().to_device("cpu")
+        embeddings = embeddings.tolist()
 
         # Return in pipeline-compatible format
         result = []
