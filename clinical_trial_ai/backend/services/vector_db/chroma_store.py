@@ -87,6 +87,72 @@ class ChromaVectorStore:
 
         return search_results
 
+    async def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search for similar documents using text query (convenience method)
+        
+        Args:
+            query: Text query to search for
+            top_k: Number of results to return
+            
+        Returns:
+            List of matching documents with metadata
+        """
+        try:
+            # This is a simplified search - in practice you'd embed the query first
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=top_k
+            )
+            
+            search_results = []
+            if results["ids"] and results["ids"][0]:
+                for i, chunk_id in enumerate(results["ids"][0]):
+                    distance = results["distances"][0][i]
+                    similarity = 1 - distance
+                    metadata = results["metadatas"][0][i]
+                    document = results["documents"][0][i]
+                    
+                    search_results.append({
+                        "id": chunk_id,
+                        "content": document,
+                        "metadata": metadata,
+                        "similarity_score": similarity
+                    })
+            
+            return search_results
+        except Exception as e:
+            print(f"Error in search: {e}")
+            return []
+
+    async def get_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all chunks for a specific document
+        
+        Args:
+            document_id: ID of the document
+            
+        Returns:
+            List of chunks for the document
+        """
+        try:
+            results = self.collection.get(where={"document_id": document_id})
+            
+            chunks = []
+            if results["ids"]:
+                for i, chunk_id in enumerate(results["ids"]):
+                    chunks.append({
+                        "id": chunk_id,
+                        "content": results["documents"][i],
+                        "metadata": results["metadatas"][i],
+                        "embedding": results["embeddings"][i] if results["embeddings"] else None
+                    })
+            
+            return chunks
+        except Exception as e:
+            print(f"Error getting chunks: {e}")
+            return []
+
     async def delete_document(self, document_id: str) -> bool:
         """Delete all embeddings for a given document ID"""
         try:
