@@ -55,7 +55,8 @@ class FileProcessingPipeline:
         await self.storage_service.update_document_status(document["id"], "PROCESSING")
 
         # Step 5: Chunk document
-        chunks: List[Dict[str, Any]] = await self.text_processor.process_document(document)
+        processed = self.text_processor.process_text(document["content"], document_id=document["id"])
+        chunks: List[Dict[str, Any]] = processed["chunks"]
 
         # Step 6: Store chunks in DB
         await self.storage_service.store_chunks(chunks)
@@ -66,7 +67,7 @@ class FileProcessingPipeline:
         embeddings = await self.embedder.generate_embeddings(chunk_texts)
 
         # Step 8: Store embeddings in Chroma
-        await self.vector_store.store_embeddings(chunks, embeddings)
+        await self.vector_store.store_embeddings(embeddings)
         await self.storage_service.update_document_status(document["id"], "EMBEDDED")
 
         return document["id"]
