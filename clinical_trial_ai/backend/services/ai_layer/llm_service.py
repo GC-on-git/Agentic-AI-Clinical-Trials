@@ -1,10 +1,10 @@
 """
-LLM Service for Clinical Trial AI - Supports multiple LLM providers
+LLM Service for Clinical Trial AI - Perplexity with Local Fallback
 """
 
 import asyncio
 import json
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 import aiohttp
 from backend.config import get_config
@@ -12,49 +12,36 @@ from backend.config import get_config
 
 class LLMProvider(ABC):
     """Abstract base class for LLM providers"""
-    
+
     @abstractmethod
-    async def generate_response(self, 
-                              messages: List[Dict[str, str]], 
-                              **kwargs) -> str:
-        """Generate response from LLM"""
-        pass
-    
-    @abstractmethod
-    async def generate_with_context(self, 
-                                  query: str, 
-                                  context: str, 
-                                  **kwargs) -> str:
+    async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
         """Generate response with context"""
         pass
 
 
-class OpenAIProvider(LLMProvider):
-    """OpenAI API provider"""
-    
-    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", base_url: Optional[str] = None):
+class PerplexityProvider(LLMProvider):
+    """Perplexity API provider (OpenAI-compatible)"""
+
+    def __init__(self, api_key: str, model: str = "llama-3.1-sonar-small-128k-online"):
         self.api_key = api_key
         self.model = model
-        self.base_url = base_url or "https://api.openai.com/v1"
+        self.base_url = "https://api.perplexity.ai"
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-    
-    async def generate_response(self, 
-                              messages: List[Dict[str, str]], 
-                              max_tokens: int = 1000,
-                              temperature: float = 0.7) -> str:
-        """Generate response using OpenAI API"""
+
+    async def _generate_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Generate response using Perplexity API"""
         try:
             async with aiohttp.ClientSession() as session:
                 payload = {
                     "model": self.model,
                     "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature
+                    "max_tokens": kwargs.get("max_tokens", 1000),
+                    "temperature": kwargs.get("temperature", 0.7)
                 }
-                
+
                 async with session.post(
                     f"{self.base_url}/chat/completions",
                     headers=self.headers,
@@ -65,18 +52,14 @@ class OpenAIProvider(LLMProvider):
                         return data["choices"][0]["message"]["content"]
                     else:
                         error_text = await response.text()
-                        raise Exception(f"OpenAI API error: {response.status} - {error_text}")
+                        raise Exception(f"Perplexity API error: {response.status} - {error_text}")
         except Exception as e:
-            print(f"Error calling OpenAI API: {e}")
-            return f"Error generating response: {str(e)}"
-    
-    async def generate_with_context(self, 
-                                  query: str, 
-                                  context: str, 
-                                  max_tokens: int = 1000,
-                                  temperature: float = 0.7) -> str:
+            print(f"Error calling Perplexity API: {e}")
+            raise e
+
+    async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
         """Generate response with clinical trial context"""
-        
+
         system_prompt = """You are a clinical trial AI assistant. You help users understand clinical trial documents, protocols, and results. 
 
 Guidelines:
@@ -98,119 +81,31 @@ Please provide a detailed response based on the context above. If the context do
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
-        
-        return await self.generate_response(messages, max_tokens, temperature)
 
-
-class AnthropicProvider(LLMProvider):
-    """Anthropic Claude API provider"""
-    
-    def __init__(self, api_key: str, model: str = "claude-3-sonnet-20240229"):
-        self.api_key = api_key
-        self.model = model
-        self.headers = {
-            "x-api-key": api_key,
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01"
-        }
-    
-    async def generate_response(self, 
-                              messages: List[Dict[str, str]], 
-                              max_tokens: int = 1000) -> str:
-        """Generate response using Anthropic API"""
-        try:
-            # Convert OpenAI format to Anthropic format
-            user_message = ""
-            for msg in messages:
-                if msg["role"] == "user":
-                    user_message += f"{msg['content']}\n"
-                elif msg["role"] == "system":
-                    user_message = f"System: {msg['content']}\n\n{user_message}"
-            
-            async with aiohttp.ClientSession() as session:
-                payload = {
-                    "model": self.model,
-                    "max_tokens": max_tokens,
-                    "messages": [{"role": "user", "content": user_message}]
-                }
-                
-                async with session.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers=self.headers,
-                    json=payload
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data["content"][0]["text"]
-                    else:
-                        error_text = await response.text()
-                        raise Exception(f"Anthropic API error: {response.status} - {error_text}")
-        except Exception as e:
-            print(f"Error calling Anthropic API: {e}")
-            return f"Error generating response: {str(e)}"
-    
-    async def generate_with_context(self, 
-                                  query: str, 
-                                  context: str, 
-                                  max_tokens: int = 1000) -> str:
-        """Generate response with clinical trial context"""
-        
-        system_prompt = """You are a clinical trial AI assistant. You help users understand clinical trial documents, protocols, and results. 
-
-Guidelines:
-- Provide accurate, evidence-based responses
-- Cite specific information from the provided context
-- Use medical terminology appropriately
-- If information is not available in the context, clearly state this
-- Focus on clinical trial specifics like endpoints, safety, efficacy, and protocols
-- Be concise but comprehensive"""
-
-        user_prompt = f"""Context from clinical trial documents:
-{context}
-
-User Question: {query}
-
-Please provide a detailed response based on the context above. If the context doesn't contain enough information to answer the question, please state that clearly."""
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        return await self.generate_response(messages, max_tokens)
+        return await self._generate_response(messages, **kwargs)
 
 
 class LocalLLMProvider(LLMProvider):
-    """Local LLM provider (placeholder for local models like Ollama)"""
-    
-    def __init__(self, model: str = "llama2", base_url: str = "http://localhost:11434"):
+    """Local LLM provider (Ollama)"""
+
+    def __init__(self, model: str = "llama3.2", base_url: str = "http://localhost:11434"):
         self.model = model
         self.base_url = base_url
-    
-    async def generate_response(self, 
-                              messages: List[Dict[str, str]], 
-                              **kwargs) -> str:
+
+    async def _generate_response(self, prompt: str, **kwargs) -> str:
         """Generate response using local LLM (Ollama)"""
         try:
-            # Convert to Ollama format
-            prompt = ""
-            for msg in messages:
-                if msg["role"] == "system":
-                    prompt += f"System: {msg['content']}\n\n"
-                elif msg["role"] == "user":
-                    prompt += f"User: {msg['content']}\n\n"
-                elif msg["role"] == "assistant":
-                    prompt += f"Assistant: {msg['content']}\n\n"
-            
-            prompt += "Assistant:"
-            
             async with aiohttp.ClientSession() as session:
                 payload = {
                     "model": self.model,
                     "prompt": prompt,
-                    "stream": False
+                    "stream": False,
+                    "options": {
+                        "temperature": kwargs.get("temperature", 0.7),
+                        "num_predict": kwargs.get("max_tokens", 1000)
+                    }
                 }
-                
+
                 async with session.post(
                     f"{self.base_url}/api/generate",
                     json=payload
@@ -223,15 +118,12 @@ class LocalLLMProvider(LLMProvider):
                         raise Exception(f"Local LLM error: {response.status} - {error_text}")
         except Exception as e:
             print(f"Error calling local LLM: {e}")
-            return f"Error generating response: {str(e)}"
-    
-    async def generate_with_context(self, 
-                                  query: str, 
-                                  context: str, 
-                                  **kwargs) -> str:
+            raise e
+
+    async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
         """Generate response with clinical trial context"""
-        
-        system_prompt = """You are a clinical trial AI assistant. You help users understand clinical trial documents, protocols, and results. 
+
+        prompt = f"""You are a clinical trial AI assistant. You help users understand clinical trial documents, protocols, and results.
 
 Guidelines:
 - Provide accurate, evidence-based responses
@@ -239,139 +131,135 @@ Guidelines:
 - Use medical terminology appropriately
 - If information is not available in the context, clearly state this
 - Focus on clinical trial specifics like endpoints, safety, efficacy, and protocols
-- Be concise but comprehensive"""
+- Be concise but comprehensive
 
-        user_prompt = f"""Context from clinical trial documents:
+Context from clinical trial documents:
 {context}
 
 User Question: {query}
 
-Please provide a detailed response based on the context above. If the context doesn't contain enough information to answer the question, please state that clearly."""
+Please provide a detailed response based on the context above. If the context doesn't contain enough information to answer the question, please state that clearly.
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        return await self.generate_response(messages, **kwargs)
+Response:"""
+
+        return await self._generate_response(prompt, **kwargs)
 
 
 class LLMService:
-    """Main LLM service that manages different providers"""
-    
+    """Main LLM service that manages Perplexity with local fallback"""
+
     def __init__(self, config=None):
         self.config = config or get_config()
-        self.provider = self._initialize_provider()
-    
-    def _initialize_provider(self) -> Optional[LLMProvider]:
-        """Initialize the appropriate LLM provider based on configuration"""
-        api_key = self.config.get_llm_api_key()
-        
-        if not api_key and self.config.llm.provider != "local":
-            print("Warning: No LLM API key found. LLM features will be disabled.")
-            return None
-        
-        if self.config.llm.provider == "openai":
-            return OpenAIProvider(
-                api_key=api_key,
+        self.primary_provider = None
+        self.fallback_provider = None
+        self._initialize_providers()
+
+    def _initialize_providers(self):
+        """Initialize Perplexity as primary and local as fallback"""
+        # Primary: Perplexity
+        perplexity_key = self.config.get_llm_api_key()  # Your Perplexity API key
+        if perplexity_key:
+            self.primary_provider = PerplexityProvider(
+                api_key=perplexity_key,
                 model=self.config.llm.model_name,
-                base_url=self.config.llm.base_url
             )
-        elif self.config.llm.provider == "anthropic":
-            return AnthropicProvider(
-                api_key=api_key,
-                model=self.config.llm.model_name
-            )
-        elif self.config.llm.provider == "local":
-            return LocalLLMProvider(
-                model=self.config.llm.model_name,
-                base_url=self.config.llm.base_url or "http://localhost:11434"
-            )
+            print("Perplexity provider initialized")
         else:
-            print(f"Unknown LLM provider: {self.config.llm.provider}")
-            return None
-    
-    async def generate_response(self, 
-                              messages: List[Dict[str, str]], 
-                              **kwargs) -> str:
-        """Generate response using the configured provider"""
-        if not self.provider:
-            return "LLM service not configured. Please set up your API key."
-        
-        return await self.provider.generate_response(messages, **kwargs)
-    
-    async def generate_with_context(self, 
-                                  query: str, 
-                                  context: str, 
-                                  **kwargs) -> str:
-        """Generate response with clinical trial context"""
-        if not self.provider:
-            return "LLM service not configured. Please set up your API key."
-        
-        return await self.provider.generate_with_context(query, context, **kwargs)
-    
-    async def chat_with_context(self, 
-                              query: str, 
+            print("Warning: No Perplexity API key found")
+
+        # Fallback: Local model
+        try:
+            self.fallback_provider = LocalLLMProvider(
+                model=getattr(self.config.llm, 'local_model', 'llama3.2'),
+                base_url=getattr(self.config.llm, 'local_base_url', 'http://localhost:11434')
+            )
+            print("Local LLM fallback initialized")
+        except Exception as e:
+            print(f"Warning: Local LLM fallback not available: {e}")
+
+    async def generate_with_context(self, query: str, context: str, **kwargs) -> str:
+        """Generate response with automatic fallback"""
+
+        # Try Perplexity first
+        if self.primary_provider:
+            try:
+                print("Trying Perplexity...")
+                response = await self.primary_provider.generate_with_context(query, context, **kwargs)
+                print("Perplexity response received")
+                return response
+            except Exception as e:
+                print(f"Perplexity failed: {e}")
+
+        # Fallback to local model
+        if self.fallback_provider:
+            try:
+                print("Falling back to local model...")
+                response = await self.fallback_provider.generate_with_context(query, context, **kwargs)
+                print("Local model response received")
+                return response
+            except Exception as e:
+                print(f"Local model failed: {e}")
+
+        return "Error: No LLM providers are available. Please check your Perplexity API key or local model setup."
+
+    async def chat_with_context(self,
+                              query: str,
                               context: str,
                               conversation_history: List[Dict[str, str]] = None,
                               **kwargs) -> Dict[str, Any]:
-        """Chat interface with context and conversation history"""
-        if not self.provider:
-            return {
-                "response": "LLM service not configured. Please set up your API key.",
-                "conversation_history": conversation_history or []
-            }
-        
-        # Build messages with conversation history
-        messages = []
-        
-        # Add system message
-        messages.append({
-            "role": "system",
-            "content": "You are a clinical trial AI assistant. Help users understand clinical trial documents, protocols, and results."
-        })
-        
-        # Add conversation history
-        if conversation_history:
-            messages.extend(conversation_history[-10:])  # Keep last 10 messages
-        
-        # Add current query with context
-        user_message = f"""Context from clinical trial documents:
-{context}
+        """Simple chat interface"""
 
-User Question: {query}
+        response = await self.generate_with_context(query, context, **kwargs)
 
-Please provide a detailed response based on the context above."""
-        
-        messages.append({"role": "user", "content": user_message})
-        
-        # Generate response
-        response = await self.provider.generate_response(messages, **kwargs)
-        
         # Update conversation history
         if conversation_history is None:
             conversation_history = []
-        
+
         conversation_history.append({"role": "user", "content": query})
         conversation_history.append({"role": "assistant", "content": response})
-        
+
+        # Keep only last 10 messages to prevent context overflow
+        if len(conversation_history) > 20:
+            conversation_history = conversation_history[-20:]
+
         return {
             "response": response,
             "conversation_history": conversation_history
         }
-    
+
     def is_configured(self) -> bool:
-        """Check if LLM service is properly configured"""
-        return self.provider is not None
-    
-    def get_provider_info(self) -> Dict[str, Any]:
-        """Get information about the current provider"""
-        if not self.provider:
-            return {"configured": False, "provider": None}
-        
+        """Check if any LLM service is available"""
+        return self.primary_provider is not None or self.fallback_provider is not None
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get service status"""
         return {
-            "configured": True,
-            "provider": self.config.llm.provider,
-            "model": self.config.llm.model_name,
-            "api_key_set": bool(self.config.get_llm_api_key())
+            "perplexity_available": self.primary_provider is not None,
+            "local_available": self.fallback_provider is not None,
+            "configured": self.is_configured(),
+            "primary_model": getattr(self.primary_provider, 'model', None),
+            "fallback_model": getattr(self.fallback_provider, 'model', None)
         }
+
+
+# Example usage
+async def test_llm_service():
+    """Test the LLM service"""
+    service = LLMService()
+
+    if not service.is_configured():
+        print("Error: No LLM providers configured")
+        return
+
+    print("Service Status:", service.get_status())
+
+    # Test query
+    context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition Y."
+    query = "What phase is this clinical trial?"
+
+    response = await service.generate_with_context(query, context)
+    print(f"Response: {response}")
+
+
+if __name__ == "__main__":
+    asyncio.run(test_llm_service())
