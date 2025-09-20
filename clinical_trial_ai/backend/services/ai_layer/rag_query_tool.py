@@ -1,11 +1,11 @@
 import asyncio
 from typing import List, Dict, Any, Optional
-from backend.services.embeddings.sbert_embed import SBERTEmbedder
-from backend.services.vector_db.chroma_store import ChromaVectorStore
-from backend.services.ai_layer.search_tool import SearchTool
-from backend.services.ai_layer.summary_tool import SummaryTool
-from backend.services.ai_layer.reasoning_tool import ReasoningTool
-from backend.services.ai_layer.llm_service import LLMService
+from clinical_trial_ai.backend.services.embeddings.sbert_embed import SBERTEmbedder
+from clinical_trial_ai.backend.services.vector_db.chroma_store import ChromaVectorStore
+from clinical_trial_ai.backend.services.ai_layer.search_tool import SearchTool
+from clinical_trial_ai.backend.services.ai_layer.summary_tool import SummaryTool
+from clinical_trial_ai.backend.services.ai_layer.reasoning_tool import ReasoningTool
+from clinical_trial_ai.backend.services.ai_layer.llm_service import LLMService
 
 
 class RAGQueryHandler:

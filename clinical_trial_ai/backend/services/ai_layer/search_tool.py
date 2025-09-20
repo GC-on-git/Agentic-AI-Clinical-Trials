@@ -1,6 +1,6 @@
 import asyncio
 from typing import List, Dict, Any
-from backend.services.vector_db.chroma_store import ChromaVectorStore
+from clinical_trial_ai.backend.services.vector_db.chroma_store import ChromaVectorStore
 
 class SearchTool:
     """Search chunks and documents in the vector database"""

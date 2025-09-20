@@ -41,7 +41,7 @@ class ChromaVectorStore:
                  for k, v in e["metadata"].items()}
                 for e in embeddings
             ]
-            documents = [e["metadata"].get("content", "") for e in embeddings]
+            documents = [e.get("content", "") for e in embeddings]
 
             self.collection.add(
                 ids=ids,

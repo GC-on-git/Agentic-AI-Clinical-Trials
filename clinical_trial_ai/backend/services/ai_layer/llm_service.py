@@ -7,7 +7,7 @@ import json
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 import aiohttp
-from backend.config import get_config
+from clinical_trial_ai.backend.config import get_config
 
 
 class LLMProvider(ABC):

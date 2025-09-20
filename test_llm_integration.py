@@ -24,20 +24,23 @@ async def test_llm_configuration():
     validation_results = config.validate()
     
     print("\n📋 Configuration Status:")
-    for service, details in validation_results.items():
-        print(f"  {service.upper()}:")
-        for key, value in details.items():
-            print(f"    {key}: {value}")
+    for key, value in validation_results.items():
+        if isinstance(value, dict):
+            print(f"  {key.upper()}:")
+            for sub_key, sub_value in value.items():
+                print(f"    {sub_key}: {sub_value}")
+        else:
+            print(f"  {key.upper()}: {value}")
     
     # Test LLM service
     print("\n🤖 Testing LLM Service...")
     llm_service = LLMService()
-    provider_info = llm_service.get_provider_info()
+    status_info = llm_service.get_status()
     
-    print(f"  Configured: {provider_info['configured']}")
-    print(f"  Provider: {provider_info.get('provider', 'None')}")
-    print(f"  Model: {provider_info.get('model', 'None')}")
-    print(f"  API Key Set: {provider_info.get('api_key_set', False)}")
+    print(f"  Configured: {status_info['configured']}")
+    print(f"  Provider: {status_info.get('provider', 'None')}")
+    print(f"  Model: {status_info.get('model', 'None')}")
+    print(f"  API Key Set: {status_info.get('api_key_set', False)}")
     
     if llm_service.is_configured():
         print("\n✅ LLM service is configured!")
@@ -114,7 +117,7 @@ async def test_rag_with_llm():
         print("✅ RAG system initialized successfully!")
         
         # Test LLM status in RAG system
-        llm_status = flow.llm_service.get_provider_info()
+        llm_status = flow.llm_service.get_status()
         print(f"  LLM Status: {'✅ Configured' if llm_status['configured'] else '❌ Not Configured'}")
         
         if llm_status['configured']:

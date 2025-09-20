@@ -8,8 +8,8 @@ import spacy
 import re
 import nltk
 
-from backend.services.text_processing.cleaning import ClinicalTextCleaner
-from backend.services.text_processing.chunking import ClinicalTextChunker
+from clinical_trial_ai.backend.services.text_processing.cleaning import ClinicalTextCleaner
+from clinical_trial_ai.backend.services.text_processing.chunking import ClinicalTextChunker
 
 # Auto-download NLTK resources
 for resource, path in [("punkt", "tokenizers/punkt"), ("stopwords", "corpora/stopwords")]:

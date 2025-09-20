@@ -314,7 +314,10 @@ EMBEDDING_CACHE_DIR=./embedding_cache
 
 
 # Global config instance
-config = Config(config_file="/Users/anuganch/Desktop/Mock3_final/clinical_trial_ai/backend/.env")
+BASE_DIR = Path(__file__).resolve().parent  # directory of the current file
+CONFIG_PATH = BASE_DIR / ".env"      # find .env
+
+config = Config(config_file=CONFIG_PATH)
 
 
 def get_config() -> Config:

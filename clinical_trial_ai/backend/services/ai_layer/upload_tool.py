@@ -1,11 +1,11 @@
 import uuid
 from pathlib import Path
 from typing import List, Dict, Any
-from backend.services.text_processing.preprocessing import ClinicalTextProcessor
-from backend.services.embeddings.sbert_embed import SBERTEmbedder
-from backend.services.vector_db.chroma_store import ChromaVectorStore
-from backend.services.storage.object_store import DocumentStorageService
-from backend.services.data_collection.user_uploads import FileUploadCollector
+from clinical_trial_ai.backend.services.text_processing.preprocessing import ClinicalTextProcessor
+from clinical_trial_ai.backend.services.embeddings.sbert_embed import SBERTEmbedder
+from clinical_trial_ai.backend.services.vector_db.chroma_store import ChromaVectorStore
+from clinical_trial_ai.backend.services.storage.object_store import DocumentStorageService
+from clinical_trial_ai.backend.services.data_collection.user_uploads import FileUploadCollector
 
 class UploadTool:
     """Handles end-to-end file upload and processing"""
@@ -60,8 +60,7 @@ class UploadTool:
         await self.storage_service.update_document_status(document["id"], "CHUNKED")
 
         # Generate embeddings
-        chunk_texts = [c["content"] for c in chunks]
-        embeddings = await self.embedder.generate_embeddings(chunk_texts)
+        embeddings = await self.embedder.generate_embeddings(chunks)
 
         # Store embeddings
         await self.vector_store.store_embeddings(embeddings)

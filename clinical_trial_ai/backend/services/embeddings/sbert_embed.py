@@ -40,6 +40,7 @@ class SBERTEmbedder:
             result.append({
                 "id": chunk_id,
                 "embedding": embeddings[i],
+                "content": chunk["content"],
                 "metadata": chunk.get("metadata", {})
             })
         return result
@@ -57,6 +58,7 @@ class SBERTEmbedder:
             result.append({
                 "id": chunk_id,
                 "embedding": embeddings[i],
+                "content": chunk["content"],
                 "metadata": chunk.get("metadata", {})
             })
         return result

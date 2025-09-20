@@ -1,9 +1,9 @@
 import asyncio
 from typing import Dict, Any, List
-from backend.services.text_processing.preprocessing import ClinicalTextProcessor
-from backend.services.embeddings.sbert_embed import SBERTEmbedder
-from backend.services.vector_db.chroma_store import ChromaVectorStore
-from backend.services.storage.object_store import DocumentStorageService
+from clinical_trial_ai.backend.services.text_processing.preprocessing import ClinicalTextProcessor
+from clinical_trial_ai.backend.services.embeddings.sbert_embed import SBERTEmbedder
+from clinical_trial_ai.backend.services.vector_db.chroma_store import ChromaVectorStore
+from clinical_trial_ai.backend.services.storage.object_store import DocumentStorageService
 # from backend.services.data_collection.user_uploads import FileUploadCollector
 
 from .upload_tool import UploadTool
