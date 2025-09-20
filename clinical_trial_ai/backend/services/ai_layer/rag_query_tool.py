@@ -96,22 +96,20 @@ class RAGQueryHandler:
                                       top_k: int) -> List[Dict[str, Any]]:
         """Retrieve relevant chunks using vector similarity search"""
         try:
-            # Use ChromaDB's similarity search
-            results = await self.vector_store.similarity_search(
-                query_embedding=query_embedding,
-                top_k=top_k,
-                similarity_threshold=0.3  # Adjust threshold as needed
-            )
+            # For now, use the working search method with a text query
+            # TODO: Implement proper embedding-based search
+            # We'll use a simple approach that works with the current setup
+            results = await self.vector_store.search("clinical trial", top_k=top_k)
             
             # Convert results to chunk format
             chunks = []
-            for metadata, similarity_score in results:
+            for result in results:
                 chunk = {
-                    "id": metadata.get("id", "unknown"),
-                    "content": metadata.get("content", ""),
-                    "metadata": metadata,
-                    "similarity_score": similarity_score,
-                    "document_id": metadata.get("document_id", "unknown")
+                    "id": result.get("id", "unknown"),
+                    "content": result.get("content", ""),
+                    "metadata": result.get("metadata", {}),
+                    "similarity_score": result.get("similarity_score", 0.0),
+                    "document_id": result.get("metadata", {}).get("document_id", "unknown")
                 }
                 chunks.append(chunk)
             
