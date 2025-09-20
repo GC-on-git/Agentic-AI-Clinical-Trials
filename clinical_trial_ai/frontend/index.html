@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Clinical Trial AI Console</title>
+    <link rel="stylesheet" href="static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <div class="logo"></div>
+          <div class="title">Clinical Trial AI Console</div>
+        </div>
+        <div class="controls">
+          <button id="themeToggle" class="btn">Toggle theme</button>
+          <button id="systemStatus" class="btn ghost">System status</button>
+        </div>
+      </header>
+
+      <div class="split">
+        <!-- Chat panel -->
+        <section class="panel chat">
+          <header class="section">
+            <div>Chatbot</div>
+            <div class="row">
+              <label class="muted">topK</label>
+              <input id="topk" type="number" min="1" max="20" value="5" class="num" />
+            </div>
+          </header>
+          <div id="messages" class="messages"></div>
+          <div class="composer">
+            <textarea id="prompt" placeholder="Ask about clinical trials..."></textarea>
+            <button id="clearChat" class="btn">Clear</button>
+            <button id="send" class="btn primary">Send</button>
+          </div>
+        </section>
+
+        <!-- Documents panel -->
+        <section class="panel">
+          <header class="section">
+            <div>Documents</div>
+            <div class="row">
+              <button id="refreshDocs" class="btn">Refresh</button>
+            </div>
+          </header>
+          <div class="content">
+            <div class="uploader">
+              <input id="fileInput" type="file" accept=".pdf,.txt,.csv" />
+              <button id="uploadBtn" class="btn primary">Upload</button>
+            </div>
+            <div class="muted">Allowed: .pdf, .txt, .csv up to 150MB.</div>
+            <div id="docList" class="list"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script src="static/app.js"></script>
+  </body>
+</html>

@@ -10,23 +10,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
 from ..schemas import (
-    SystemStatusResponse, HealthResponse, RootResponse, 
+    SystemStatusResponse, HealthResponse, RootResponse,
     AgentsResponse, ErrorResponse
 )
 from ..dependencies import get_flow, get_app_state
 
 router = APIRouter(prefix="/api/v1", tags=["system"])
-
-
-@router.get("/", response_model=RootResponse)
-async def root(app_state=Depends(get_app_state)):
-    """Root endpoint with API information"""
-    return RootResponse(
-        message="Clinical Trial AI API",
-        version="1.0.0",
-        status="running" if app_state["initialized"] else "initializing",
-        docs="/docs"
-    )
 
 
 @router.get("/health", response_model=HealthResponse)

@@ -7,16 +7,21 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+from starlette.responses import HTMLResponse, FileResponse
+from starlette.staticfiles import StaticFiles
+
+from backend.config import config
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from api.dependencies import initialize_system, shutdown_system
+from api.dependencies import initialize_system, shutdown_system, get_app_state
 from api.schemas import ErrorResponse
 from api.routers import documents, queries, system
 
@@ -45,6 +50,10 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+BASE_DIR = Path(__file__).resolve().parent
+# print(f"{BASE_DIR.parent}/frontend")
+app.mount("/static", StaticFiles(directory=f"{BASE_DIR.parent}/frontend", html=True), name="static")
 
 # CORS middleware
 app.add_middleware(
@@ -84,6 +93,11 @@ async def general_exception_handler(request, exc):
             timestamp=datetime.now()
         ).model_dump()
     )
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Root endpoint with API information"""
+    return FileResponse(f"{BASE_DIR.parent}/frontend/index.html")
 
 
 # Main function for running the server
