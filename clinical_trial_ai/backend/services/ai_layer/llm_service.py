@@ -28,9 +28,9 @@ class OpenRouterProvider(LLMProvider):
         self.base_url = "https://openrouter.ai/api/v1"
         self.headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://clinical-trial-ai.com",  # Optional: your site URL
-            "X-Title": "Clinical Trial AI"  # Optional: your app name
+            "Content-Type": "application/json"
+            # "HTTP-Referer": "https://clinical-trial-ai.com",  # Optional: your site URL
+            # "X-Title": "Clinical Trial AI"  # Optional: your app name
         }
 
     async def _generate_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
@@ -274,11 +274,11 @@ async def test_llm_service():
     print("=== Testing OpenRouter ===")
     service_or = LLMService(provider_type="openrouter")
 
+    context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition bone cancer"
+    query = "In this case, what conditions do the patients have?"
+
     if service_or.is_configured():
         print("OpenRouter Status:", service_or.get_status())
-
-        context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition Y."
-        query = "What phase is this clinical trial?"
 
         response = await service_or.generate_with_context(query, context)
         print(f"OpenRouter Response: {response}")
@@ -291,9 +291,6 @@ async def test_llm_service():
 
     if service_px.is_configured():
         print("Perplexity Status:", service_px.get_status())
-
-        context = "This is a Phase II clinical trial studying the efficacy of Drug X in patients with condition Y."
-        query = "What phase is this clinical trial?"
 
         response = await service_px.generate_with_context(query, context)
         print(f"Perplexity Response: {response}")
