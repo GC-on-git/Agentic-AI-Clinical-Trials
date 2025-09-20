@@ -7,12 +7,12 @@ Provides dependency injection for FastAPI endpoints
 from typing import Dict, Any
 from fastapi import HTTPException, Depends
 
-from ..services.ai_layer.langgraph_flow import LangGraphFlow
-from ..services.text_processing.preprocessing import ClinicalTextProcessor
-from ..services.embeddings.sbert_embed import SBERTEmbedder
-from ..services.vector_db.chroma_store import ChromaVectorStore
-from ..services.storage.object_store import DocumentStorageService
-from ..config import get_config
+from clinical_trial_ai.backend.services.ai_layer.langgraph_flow import LangGraphFlow
+from clinical_trial_ai.backend.services.text_processing.preprocessing import ClinicalTextProcessor
+from clinical_trial_ai.backend.services.embeddings.sbert_embed import SBERTEmbedder
+from clinical_trial_ai.backend.services.vector_db.chroma_store import ChromaVectorStore
+from clinical_trial_ai.backend.services.storage.object_store import DocumentStorageService
+from clinical_trial_ai.backend.config import get_config
 
 
 # Global app state
