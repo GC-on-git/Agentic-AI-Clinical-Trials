@@ -55,7 +55,7 @@ class ClinicalTrialAIDemo:
         
         # Ensure document is processed
         print("\n📄 Processing clinical trial document...")
-        file_path = "/Users/marnaidu/Documents/Learning/Agentic-AI-Clinical-Trials/mock_data.pdf"
+        file_path = "/Users/anuganch/Desktop/Mock3_final/mock_data.pdf"
         document_id = await self.flow.upload_tool.process_file(file_path)
         print(f"📝 Document ready: {document_id}")
         
